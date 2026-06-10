@@ -15,11 +15,19 @@ class EmployeesComponent extends BaseComponent
 
     protected $companiesPackage;
 
-    public function initialize()
+    public function initialize($onlyActivityLogs = false)
     {
         $this->employeesPackage = $this->usePackage(Employees::class);
 
+        $this->setActivityLogsPackage($this->employeesPackage, 'employees/activitylogs');
+
+        if ($onlyActivityLogs) {
+            return;
+        }
+
         $this->companiesPackage = $this->usePackage(Companies::class);
+
+        $this->setNotificationPackage($this->employeesPackage);
     }
 
     /**
@@ -40,10 +48,15 @@ class EmployeesComponent extends BaseComponent
 
             $employeesArr = $this->employeesPackage->getAll()->employees;
             if ($employeesArr && count($employeesArr) > 0) {
-                foreach ($employeesArr as $employees) {
+                foreach ($employeesArr as &$employees) {
                     if (!isset($designations[$employees['designation']])) {
-                        $designations[$employees['designation']]['id'] = $module['designation'];
-                        $designations[$employees['designation']]['name'] = ucfirst($module['designation']);
+                        $designations[$employees['designation']]['id'] = $employees['designation'];
+                        $designations[$employees['designation']]['name'] = ucfirst($employees['designation']);
+                    }
+                    $employee = $this->employeesPackage->getEmployees($employees['id']);
+
+                    if (isset($employee['contact'])) {
+                        $employees['full_name'] = $employee['contact']['full_name'];
                     }
                 }
             }
@@ -53,7 +66,7 @@ class EmployeesComponent extends BaseComponent
             $this->view->employees = $employeesArr;
 
             if ($this->getData()['id'] != 0) {
-                $employee = $this->employeesPackage->getVehicle((int) $this->getData()['id']);
+                $employee = $this->employeesPackage->getEmployees((int) $this->getData()['id']);
 
                 if (!$employee) {
                     return $this->throwIdNotFound();
@@ -63,8 +76,15 @@ class EmployeesComponent extends BaseComponent
                     unset($employeesArr[$employee['id']]);
                 }
 
-
                 $this->view->employee = $employee;
+
+                $this->view->account = [];
+
+                $account = $this->basepackages->accounts->checkAccountBy($employee['id'], false, 'profile_package_row_id');
+
+                if ($account) {
+                    $this->view->account = [$account];
+                }
             }
 
             $this->view->pick('employees/view');
@@ -76,26 +96,57 @@ class EmployeesComponent extends BaseComponent
             [
                 'actionsToEnable'       =>
                 [
-                    'edit'      => 'employees'
+                    'edit'      => 'employees',
+                    'remove'    => 'employees/remove'
                 ]
             ];
 
         $replaceColumns =
             function ($dataArr) {
                 if ($dataArr && is_array($dataArr) && count($dataArr) > 0) {
-                    //
+                    $organisations = [];
+                    $organisationsArr = $this->companiesPackage->getCompaniesByBusinessType();
+                    if ($organisationsArr && count($organisationsArr) > 0) {
+                        foreach ($organisationsArr as $organisation) {
+                            $organisation['name'] = $organisation['name'] . ' (' . $organisation['pan'] . ')';
+                            $organisations[$organisation['id']] = $organisation;
+                        }
+                    }
+
+                    foreach ($dataArr as &$data) {
+                        $account = $this->basepackages->accounts->checkAccountBy($data['id'], false, 'profile_package_row_id');
+
+                        if ($account) {
+                            $data['account_id'] = $account['email'] . ' (' . $account['id'] . ')';
+                        }
+
+                        if (isset($data['designation']) && $data['designation'] !== '') {
+                            $data['designation'] = strtoupper($data['designation']);
+                        } else {
+                            $data['designation'] = '-';
+                        }
+
+                        if (isset($organisations[$data['organisation_id']])) {
+                            $data['organisation_id'] = $organisations[$data['organisation_id']]['name'];
+                        }
+                    }
                 }
 
                 return $dataArr;
             };
 
+        if ($this->request->isPost()) {
+            $this->employeesPackage->setFFRelations(true);
+            $this->employeesPackage->setFFRelationsConditions(['addresses' => ['package_name', '=', 'Employees'], 'contact' => ['package_name', '=', 'Employees']]);
+        }
+
         $this->generateDTContent(
             $this->employeesPackage,
             'employees/view',
             [],
-            ['employee_id', 'organisation_id'],
+            ['employee_id', 'first_name', 'last_name', 'contact_mobile', 'designation', 'organisation_id', 'account_id'],
             true,
-            ['employee_id', 'organisation_id'],
+            ['employee_id', 'first_name', 'last_name', 'contact_mobile', 'designation', 'organisation_id', 'account_id'],
             $controlActions,
             null,
             $replaceColumns,
@@ -119,10 +170,6 @@ class EmployeesComponent extends BaseComponent
             $this->employeesPackage->packagesData->responseMessage,
             $this->employeesPackage->packagesData->responseCode
         );
-
-        if ($this->employeesPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('add', 'Added new employee ' . $this->employeesPackage->packagesData->last['name'], null, $this->employeesPackage->packagesData->last);
-        }
     }
 
     /**
@@ -141,10 +188,6 @@ class EmployeesComponent extends BaseComponent
             $this->employeesPackage->packagesData->responseMessage,
             $this->employeesPackage->packagesData->responseCode
         );
-
-        if ($this->employeesPackage->packagesData->responseCode === 0) {
-            $this->addToNotification('update', 'Updated employee ' . $this->employeesPackage->packagesData->last['name'], null, $this->employeesPackage->packagesData->last);
-        }
     }
 
     /**
@@ -161,6 +204,8 @@ class EmployeesComponent extends BaseComponent
             $this->employeesPackage->packagesData->responseMessage,
             $this->employeesPackage->packagesData->responseCode
         );
+
+        $this->setNotificationPackage();
 
         if ($this->employeesPackage->packagesData->responseCode === 0) {
             $this->addToNotification('remove', 'Archived employee ' . $this->employeesPackage->packagesData->last['name'], null, $this->employeesPackage->packagesData->last);

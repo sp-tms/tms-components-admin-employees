@@ -31,7 +31,14 @@
 			}
 		],
 		"middlewares" : [],
-		"views" : [],
+		"views" : 
+		[
+			{
+				"name" : "Employees",
+				"version" : "0.2.0",
+				"repo" : "https://github.com/sp-tms/tms-views-admin-default-employees"
+			}
+		],
 		"externals" : 
 		{
 			"composer" : 

@@ -47,6 +47,7 @@ class EmployeesComponent extends BaseComponent
             $designations = [];
 
             $employeesArr = $this->employeesPackage->getAll()->employees;
+
             if ($employeesArr && count($employeesArr) > 0) {
                 foreach ($employeesArr as &$employees) {
                     if (!isset($designations[$employees['designation']])) {
@@ -61,9 +62,12 @@ class EmployeesComponent extends BaseComponent
                 }
             }
 
+            $this->view->employees = $employeesArr;
+
             $this->view->designations = $designations;
 
-            $this->view->employees = $employeesArr;
+            //Available Employee Status
+            $this->view->employeeStatuses = $this->employeesPackage->getEmployeeAvailableStatus();
 
             if ($this->getData()['id'] != 0) {
                 $employee = $this->employeesPackage->getEmployees((int) $this->getData()['id']);

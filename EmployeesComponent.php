@@ -141,7 +141,12 @@ class EmployeesComponent extends BaseComponent
 
         if ($this->request->isPost()) {
             $this->employeesPackage->setFFRelations(true);
-            $this->employeesPackage->setFFRelationsConditions(['addresses' => ['package_name', '=', 'Employees'], 'contact' => ['package_name', '=', 'Employees']]);
+            $this->employeesPackage->setFFRelationsConditions(
+                [
+                    'addresses' => ['package_class', '=', str_replace('\\', '_', Employees::class)],
+                    'contact' => ['package_class', '=', str_replace('\\', '_', Employees::class)]
+                ]
+            );
         }
 
         $this->generateDTContent(
